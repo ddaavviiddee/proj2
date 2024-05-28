@@ -19,6 +19,7 @@ class FirewallManagerApp:
             return
 
         self.setup_ui()
+        self.show_rules()
 
     # Input per la password
     def ask_sudo_password(self):
@@ -186,7 +187,7 @@ class FirewallManagerApp:
                 self.run_iptables_command(f"iptables -D INPUT -s {ip} -j DROP")
                 self.show_rules()
             else:
-                port_protocol_match = re.search(r'\s(tcp|udp|icmp)\sdpt:(\d+)', selected_rule)
+                port_protocol_match = re.search(r'\s(tcp|udp)\sdpt:(\d+)', selected_rule)
                 protocol = port_protocol_match.group(1)
                 port = port_protocol_match.group(2)
                 if port_protocol_match:
@@ -226,7 +227,7 @@ class FirewallManagerApp:
         label_protocol = ctk.CTkLabel(frame, text="Protocollo:")
         label_protocol.grid(row=2, column=0, padx=5, pady=5)
 
-        self.protocol_selector = ctk.CTkComboBox(frame, values=["tcp", "udp", "icmp"])
+        self.protocol_selector = ctk.CTkComboBox(frame, values=["tcp", "udp"])
         self.protocol_selector.grid(row=2, column=1, padx=5, pady=5)
         self.protocol_selector.set("tcp")
 
@@ -274,7 +275,7 @@ class FirewallManagerApp:
 
 if __name__ == "__main__":
     root = ctk.CTk()
-    root.title("Gestore Firewall con Iptables")
+    root.title("Iptables Firewall")
 
     app = FirewallManagerApp(root)
     app.start()
