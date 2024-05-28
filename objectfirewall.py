@@ -1,53 +1,68 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import simpledialog, messagebox
 import subprocess
 import re
+from CTkMessagebox import CTkMessagebox
 
 class FirewallManagerApp:
     def __init__(self, root):
         self.root = root
         self.domain_ip_map = {}
         self.sudo_password = self.ask_sudo_password()
-        
-        # La password è richiesta in quanto iptables funziona solo con sudo
+
         if not self.sudo_password:
-            messagebox.showerror("Errore", "Password sudo richiesta per eseguire i comandi iptables.")
+            CTkMessagebox(title="Errore", message="Password sudo richiesta per eseguire i comandi iptables.", icon="cancel")
             self.root.destroy()
             return
 
         self.setup_ui()
 
-    # Iput per la password
     def ask_sudo_password(self):
-        return simpledialog.askstring("Password sudo", "Inserisci la password sudo:", show='*')
+        while True:
+            password_dialog = ctk.CTkInputDialog(title="Password sudo", text="Inserisci la password sudo:")
+            password_dialog.configure(show="*")
+            password = password_dialog.get_input()
 
-    # Metodo per il comando da runnare
+            if not password:
+                return None
+            if self.validate_sudo_password(password):
+                return password
+            else:
+                CTkMessagebox(title="Errore", message="Password sudo non valida. Riprova.", icon="cancel")
+
+    def validate_sudo_password(self, password):
+        try:
+            process = subprocess.Popen(['sudo', '-S', 'echo', 'password_check'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = process.communicate(input=password + '\n', timeout=5)
+            return process.returncode == 0
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return False
+        except subprocess.CalledProcessError:
+            return False
+
     def run_iptables_command(self, command, show_message=True):
         try:
             result = subprocess.run(['sudo', '-S'] + command.split(), input=self.sudo_password + '\n', text=True, capture_output=True)
             if result.returncode == 0:
                 if show_message:
-                    messagebox.showinfo("Successo", "Comando eseguito con successo!")
+                    CTkMessagebox(title="Successo", message="Azione avvenuta con successo.", icon="check")
             else:
-                messagebox.showerror("Errore", f"Errore nell'esecuzione del comando: {result.stderr}")
+                CTkMessagebox(title="Errore", message=f"Errore nell'esecuzione del comando: {result.stderr}", icon="cancel")
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Errore", f"Errore nell'esecuzione del comando: {e}")
+            CTkMessagebox(title="Errore", message=f"Errore nell'esecuzione del comando: {e}", icon="cancel")
 
-    # Questo metodo usa dig per risalire a tutti gli IP del dominio inserito
-    # in quanto iptables funziona tramite IP
     def resolve_domain(self, domain):
         result = subprocess.run(['dig', '+short', domain], capture_output=True, text=True)
         return result.stdout.splitlines()
 
-    # Metodo che blocca l'IP inserito
     def block_ip(self):
         ip = self.entry_ip.get()
         if ip:
             self.run_iptables_command(f"iptables -A INPUT -s {ip} -j DROP")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Inserisci un indirizzo IP valido.")
+            CTkMessagebox(title="Attenzione", message="Inserisci un indirizzo IP valido.", icon="warning")
 
     def unblock_ip(self):
         ip = self.entry_ip.get()
@@ -55,7 +70,7 @@ class FirewallManagerApp:
             self.run_iptables_command(f"iptables -D INPUT -s {ip} -j DROP")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Inserisci un indirizzo IP valido.")
+            CTkMessagebox(title="Attenzione", message="Inserisci un indirizzo IP valido.", icon="warning")
 
     def block_port(self):
         port = self.entry_port.get()
@@ -64,7 +79,7 @@ class FirewallManagerApp:
             self.run_iptables_command(f"iptables -A INPUT -p {protocol} --dport {port} -j DROP")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Inserisci una porta e un protocollo validi.")
+            CTkMessagebox(title="Attenzione", message="Inserisci una porta e un protocollo validi.", icon="warning")
 
     def unblock_port(self):
         port = self.entry_port.get()
@@ -73,13 +88,14 @@ class FirewallManagerApp:
             self.run_iptables_command(f"iptables -D INPUT -p {protocol} --dport {port} -j DROP")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Inserisci una porta e un protocollo validi.")
+            CTkMessagebox(title="Attenzione", message="Inserisci una porta e un protocollo validi.", icon="warning")
 
     def show_rules(self):
         result = subprocess.run(['sudo', '-S', 'iptables', '-L', '-n'], input=self.sudo_password + '\n', text=True, capture_output=True)
         cleaned_output = self.clean_iptables_output(result.stdout)
-        self.output_text.delete("1.0", tk.END)
-        self.output_text.insert(tk.END, cleaned_output)
+        self.rules_listbox.delete(0, tk.END)
+        for line in cleaned_output.splitlines():
+            self.rules_listbox.insert(tk.END, line)
 
     def flush_rules(self):
         self.run_iptables_command("iptables -F")
@@ -105,7 +121,7 @@ class FirewallManagerApp:
             self.run_iptables_command(f"iptables {rule}")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Inserisci una regola iptables valida.")
+            CTkMessagebox(title="Attenzione", message="Inserisci una regola valida.", icon="warning")
 
     def block_domain(self):
         domain = self.entry_domain.get()
@@ -118,9 +134,9 @@ class FirewallManagerApp:
                     self.run_iptables_command(f"iptables -A INPUT -s {ip} -j DROP", show_message=show_message)
                 self.show_rules()
             else:
-                messagebox.showerror("Errore", f"Impossibile risolvere il dominio: {domain}")
+                CTkMessagebox(title="Errore", message=f"Impossibile risolvere il dominio: {domain}", icon="cancel")
         else:
-            messagebox.showwarning("Attenzione", "Inserisci un dominio valido.")
+            CTkMessagebox(title="Attenzione", message="Inserisci un dominio valido.", icon="warning")
 
     def unblock_domain(self):
         domain = self.entry_domain.get()
@@ -128,15 +144,39 @@ class FirewallManagerApp:
             for ip in self.domain_ip_map[domain]:
                 self.run_iptables_command(f"iptables -D INPUT -s {ip} -j DROP", show_message=False)
             del self.domain_ip_map[domain]
-            messagebox.showinfo("Successo", f"Dominio sbloccato con successo! ({domain})")
+            CTkMessagebox(title="Successo", message=f"Dominio sbloccato con successo! ({domain})", icon="check")
             self.show_rules()
         else:
-            messagebox.showwarning("Attenzione", "Dominio non trovato nella lista dei domini bloccati.")
+            CTkMessagebox(title="Attenzione", message="Dominio non trovato nella lista dei domini bloccati.", icon="warning")
+
+    def remove_selected_rule(self):
+        selected_index = self.rules_listbox.curselection()
+        if selected_index:
+            selected_rule = self.rules_listbox.get(selected_index)
+            print(selected_rule)
+
+            ip_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', selected_rule)
+            ip = ip_match.group(1)
+
+            if ip_match and ip != "0.0.0.0":
+                self.run_iptables_command(f"iptables -D INPUT -s {ip} -j DROP")
+                self.show_rules()
+            else:
+                port_protocol_match = re.search(r'\s(tcp|udp|icmp)\sdpt:(\d+)', selected_rule)
+                protocol = port_protocol_match.group(1)
+                port = port_protocol_match.group(2)
+                if port_protocol_match:
+                    self.run_iptables_command(f"iptables -D INPUT -p {protocol} --dport {port} -j DROP")
+                    self.show_rules()
+                else:
+                    CTkMessagebox(title="Errore", message="Impossibile trovare le informazioni sulla porta e sul protocollo nella regola selezionata.", icon="cancel")
+        else:
+            CTkMessagebox(title="Attenzione", message="Seleziona una regola da rimuovere.", icon="warning")
+
 
     def setup_ui(self):
-        ctk.set_appearance_mode("System") 
+        ctk.set_appearance_mode("System")
         ctk.set_default_color_theme("dark-blue")
-
 
         frame = ctk.CTkFrame(self.root, width=200, height=200)
         frame.pack(pady=20)
@@ -164,7 +204,7 @@ class FirewallManagerApp:
 
         self.protocol_selector = ctk.CTkComboBox(frame, values=["tcp", "udp", "icmp"])
         self.protocol_selector.grid(row=2, column=1, padx=5, pady=5)
-        self.protocol_selector.set("tcp")  # Seleziona di default il primo protocollo (tcp)
+        self.protocol_selector.set("tcp")
 
         btn_block_port = ctk.CTkButton(frame, text="Blocca Porta", command=self.block_port)
         btn_block_port.grid(row=1, column=3, padx=5, pady=10)
@@ -199,8 +239,11 @@ class FirewallManagerApp:
         btn_flush = ctk.CTkButton(frame, text="Cancella Tutte le Regole", command=self.flush_rules)
         btn_flush.grid(row=5, column=4, padx=5, pady=20)
 
-        self.output_text = ctk.CTkTextbox(self.root, height=300, width=600, padx=10, pady=10)
-        self.output_text.pack(pady=20)
+        self.rules_listbox = tk.Listbox(self.root, height=15, width=80)
+        self.rules_listbox.pack(pady=20)
+
+        btn_remove_selected_rule = ctk.CTkButton(self.root, text="Rimuovi Regola Selezionata", command=self.remove_selected_rule)
+        btn_remove_selected_rule.pack(pady=10)
 
     def start(self):
         self.root.mainloop()
