@@ -128,8 +128,8 @@ def unblock_domain():
         messagebox.showwarning("Attenzione", "Dominio non trovato nella lista dei domini bloccati.")
 
 # Creazione della GUI con customtkinter
-ctk.set_appearance_mode("light")  # Imposta il tema scuro o chiaro
-ctk.set_default_color_theme("blue")  # Imposta il tema colore
+ctk.set_appearance_mode("System")  # Imposta il tema scuro o chiaro
+ctk.set_default_color_theme("dark-blue")  # Imposta il tema colore
 
 root = ctk.CTk()
 root.title("Gestore Firewall con Iptables")
